@@ -22,6 +22,8 @@ import uuid
 import requests
 import os
 
+tf.keras.backend.clear_session()
+
 app = Flask(__name__)
 CORS(app)
 def preprocess_image(image):
