@@ -3,6 +3,7 @@ from PIL import Image
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google.cloud import storage
+from dotenv import load_dotenv
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout, GlobalAveragePooling2D, Dense, Input, Lambda
 from tensorflow.keras.models import Model
@@ -73,14 +74,14 @@ outputs = Dense(1, activation="sigmoid")(distance)
 @app.route('/users', methods=['GET'])
 def get_users():
     cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM users")
+    cur.execute("SELECT * FROM user")
     data = cur.fetchall()
     cur.close()
     users = []
     for user in data:
         user_dict = {
             'id': user[0],
-            'name': user[1],
+            'nama': user[1],
             'email': user[2]
         }
         users.append(user_dict)
