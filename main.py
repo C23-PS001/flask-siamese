@@ -88,11 +88,14 @@ def get_users():
 
 @app.route('/users', methods=['POST'])
 def add_user():
-    name = request.json['name']
+    nik = request.json['nik']
+    nama = request.json['nama']
+    tanggalLahir = request.json['tanggalLahir']
     email = request.json['email']
+    password = request.json['password']
 
     cur = mysql.connection.cursor()
-    cur.execute("INSERT INTO users (name, email) VALUES (%s, %s)", (name, email))
+    cur.execute("INSERT INTO user (nik, nama, tanggalLahir, email, password) VALUES (%s, %s,%s, %s)", (nik, nama, tanggalLahir, email, password))
     mysql.connection.commit()
     cur.close()
 
