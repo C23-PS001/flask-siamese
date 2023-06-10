@@ -1,9 +1,8 @@
-from urllib.parse import unquote
-from io import BytesIO
-from PIL import Image
-from flask import Flask, request
-from flask_cors import CORS
-from google.cloud import storage
+import numpy as np
+import json
+import uuid
+import requests
+import os
 
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D
@@ -15,26 +14,21 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras import backend as k
-import cv2
-import numpy as np
-import json
-import uuid
-import requests
-import os
+from io import BytesIO
+from PIL import Image
+from flask import Flask, request
+from flask_cors import CORS
+from google.cloud import storage
+
 
 tf.keras.backend.clear_session()
-
 app = Flask(__name__)
 CORS(app)
 def preprocess_image(image):
-    # Resize the image to match the input size of your model
-    desired_size = (64, 64)  # Replace with your model's input size
-    image = cv2.resize(image, desired_size)
-
-    # Normalize the pixel values
+    desired_size = (64, 64)
+    image= np.resize(image,desired_size)
     image = image.astype('float32') / 255.0
-
-    # Add an extra dimension to match the model's input shape
+    
     image = np.expand_dims(image, axis=0)
     
     return image
@@ -78,7 +72,7 @@ def train():
     getGambar1.save(getGambar1.filename)
     getGambar2.save(getGambar2.filename)
     idUser = request.form.get("idUser")
-    #Building Model
+
     model = Model(inputs=[imgA, imgB], outputs=outputs)
     model.load_weights("./transfer.h5")
     
@@ -88,16 +82,13 @@ def train():
     bucket = client.get_bucket(bucket_name)
 
 
-    #Import Gambar Person
-
     gambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]#Gambar Lurus
     gambar2=preprocess_image(np.array(Image.open(getGambar2)))[0]#Gambar Samping
-    gambar3=gambar2[:,::-1] #Balik Gambar
-    #Import Gambar Lawan
-    pic1=preprocess_image(cv2.imread("./lawan_1.png"))[0][:,:,0]
-    pic2=preprocess_image(cv2.imread("./lawan_2.png"))[0][:,:,0]
-    pic3=preprocess_image(cv2.imread("./lawan_3.png"))[0][:,:,0]
-    
+    gambar3=gambar2[:,::-1]
+
+    pic1=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_1.png")))[0]
+    pic2=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_2.png")))[0]
+    pic3=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_3.png")))[0]
     
     
     gambar1Name = str(uuid.uuid4())+"_"+getGambar1.filename
@@ -117,9 +108,6 @@ def train():
     #Array
     arr_gambar=np.array([gambar1,gambar2,gambar3])
     arr_pic=np.array([pic1,pic2,pic3])
-    #arr_gambar=arr_gambar[:,:,0]
-    #arr_pic=arr_pic[:,:,0]
-    #Shuffling
     print(arr_gambar.shape, arr_pic.shape)
     gab=np.append(arr_gambar,arr_pic,axis=0)
     gablabel=np.append(np.ones(3),np.zeros(3))
@@ -159,8 +147,9 @@ def train():
 def predict():
     print('masuk')
 
-    getGambar1 = request.form.get('linkFoto1')
-    getGambar1 = requests.get(getGambar1)
+    getGambar1 = request.files['Gambar']#Files Gambar Aldo
+    getGambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]
+
     getGambar2 = request.form.get('linkFoto2')
     getGambar2 = requests.get(getGambar2)
     getModel = request.form.get('linkModel')
@@ -175,19 +164,15 @@ def predict():
     
 
     #Building Model
-    validasi= np.array(Image.open(BytesIO(getGambar1.content)))
+    validasi= getGambar1
     anchor= np.array(Image.open(BytesIO(getGambar2.content)))
-    #Loading Weights
     new_model = Model(inputs=[imgA, imgB], outputs=outputs)
-    # new_model.load_weights("./nathan_pasrah.h5")
     new_model.load_weights("./"+modelFileName)
 
     #processing
     validasi=preprocess_image(validasi)[0]
     anchor=preprocess_image(anchor)[0]
     print(validasi.shape,anchor.shape)
-    #validasi=validasi[:,:]
-    #anchor=anchor[:,:]
 
     #Prediction 
     Hasil=new_model.predict([np.array([validasi]),np.array([anchor])])[0][0]
