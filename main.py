@@ -246,7 +246,8 @@ def predict():
     #Prediction 
     Hasil=new_model.predict([np.array([validasi]),np.array([anchor])])[0][0]
     print(type(Hasil))
-    
+    sql.close()
+    dbConn.close()
     os.remove("./"+modelFileName)
 
     #Threshold
@@ -254,11 +255,15 @@ def predict():
         sql.execute("UPDATE user SET verified = 1 WHERE id = %s", (getIdUser,))
         
         dbConn.commit()
+        sql.close()
+        dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
     else:
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
+
+
 
 
 if __name__ == '__main__':
