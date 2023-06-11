@@ -1,11 +1,13 @@
 Flask==2.2.2
 gunicorn==20.1.0
+cmake==3.26.4
 numpy==1.23.4
 tensorflow==2.10.0
 Pillow==9.3.0
 google-cloud-storage==2.9.0
 flask-cors==3.0
 requests==2.29.0
-Flask-MySQLdb==1.0.1
 python-dotenv==1.0.0
-mysql-connector-python==3.19.6
+PyMySQL==1.0.3
+dlib==19.24.1
+# google-cloud-secret-manager==2.16.1

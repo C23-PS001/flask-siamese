@@ -1,6 +1,6 @@
 from io import BytesIO
 from PIL import Image
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_cors import CORS
 from google.cloud import storage
 from dotenv import load_dotenv
@@ -14,9 +14,9 @@ import json
 import uuid
 import requests
 import os
-from flask_mysqldb import MySQL
+# from flask_mysqldb import MySQL
 from dotenv import load_dotenv
-import mysql.connector
+import pymysql
 import dlib
 
 load_dotenv()  # Load environment variables from .env file
@@ -25,13 +25,18 @@ tf.keras.backend.clear_session()
 app = Flask(__name__)
 CORS(app)
 
-# MySQL configurations
-app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
-app.config['MYSQL_USER'] = os.getenv('DB_USER')
-app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASS')
-app.config['MYSQL_DB'] = os.getenv('DB_NAME')
+# # MySQL configurations
+# app.config['MYSQL_HOST'] = 
+# app.config['MYSQL_USER'] = 
+# app.config['MYSQL_PASSWORD'] = 
+# app.config['MYSQL_DB'] = 
 
-mysql = MySQL(app)
+dbConn = pymysql.connect(
+    host=os.getenv('DB_HOST'),
+    user=os.getenv('DB_USER'),
+    password= os.getenv('DB_PASS'),
+    db=os.getenv('DB_NAME')
+)
 
 def preprocess_image(image):
     desired_size = (64, 64)
@@ -68,8 +73,8 @@ def euclidean_distance(vectors):
 
 
 def get_faces(picture):
-    gray=picture.mean(axis=2)
-    faces = detector(gray)
+    # gray=picture.mean(axis=2)
+    faces = detector(picture)
     if len(faces) == 1:
         for face in faces:
             # Get the coordinates of the face
@@ -79,7 +84,7 @@ def get_faces(picture):
             h = face.height()
 
             # Draw a rectangle around the face
-            Crop=gray[y:y+h,x:x+w]
+            Crop=picture[y:y+h,x:x+w]
     return Crop
 
 feature_extractor = create_model()
@@ -92,107 +97,110 @@ outputs = Dense(1, activation="sigmoid")(distance)
 
 @app.route('/training', methods=['POST'])
 def train():
-    getGambar1 = request.files['image1']
-    getGambar2 = request.files['image2']    
-    getGambar1.save(getGambar1.filename)
-    getGambar2.save(getGambar2.filename)
-    idUser = request.form.get("idUser")
-    sql = mysql.connect.cursor()
     
-    query1 = "SELECT id FROM user WHERE id = %s"
-    
-    sql.execute(query1, (idUser,))
-    data = sql.fetchone()
-    
-    if len(data) == 0:
-        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
-    
-    model = Model(inputs=[imgA, imgB], outputs=outputs)
-    model.load_weights("./transfer.h5")
-    
-    credentials_path = r"nyobaaja-973da4b3851c.json"
-    client = storage.Client.from_service_account_json(credentials_path)
-    bucket_name = 'upload_foto'
-    bucket = client.get_bucket(bucket_name)
+        getGambar1 = request.files['image1']
+        getGambar2 = request.files['image2']    
+        getGambar1.save(getGambar1.filename)
+        getGambar2.save(getGambar2.filename)
+        idUser = request.form.get("idUser")
+        sql = dbConn.cursor()
+        
+        query1 = "SELECT id FROM user WHERE id = %s"
+        
+        sql.execute(query1, (idUser,))
+        data = sql.fetchall()
+        
+        if len(data) == 0:
+            return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
+        
+        model = Model(inputs=[imgA, imgB], outputs=outputs)
+        model.load_weights("./transfer.h5")
+        
+        credentials_path = r"nyobaaja-973da4b3851c.json"
+        client = storage.Client.from_service_account_json(credentials_path)
+        bucket_name = 'upload_foto'
+        bucket = client.get_bucket(bucket_name)
 
 
-    gambar1=np.array(Image.open(getGambar1))#Gambar Lurus
-    gambar1=get_faces(gambar1)#udah dicrop, grayscale
-    gambar1=preprocess_image(gambar1)[0]
+        gambar1=np.array(Image.open(getGambar1))#Gambar Lurus
+        gambar1=get_faces(gambar1)#udah dicrop, grayscale
+        gambar1=preprocess_image(gambar1)[0]
+        gambar2=np.array(Image.open(getGambar2))#Gambar Samping
+        gambar2=get_faces(gambar2)#udah dicrop, grayscale
+        gambar2=preprocess_image(gambar2)[0]
 
-    gambar2=np.array(Image.open(getGambar2))#Gambar Samping
-    gambar2=get_faces(gambar2)#udah dicrop, grayscale
-    gambar2=preprocess_image(gambar2)[0]
+
+        gambar3=gambar2[:,::-1]
+
+        pic1=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_1.png")))[0]
+        pic2=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_2.png")))[0]
+        pic3=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_3.png")))[0]
+        
+        
+        gambar1Name = str(uuid.uuid4())+"_"+getGambar1.filename
+        gambar2Name = str(uuid.uuid4())+"_"+getGambar2.filename
+
+        
+        blob1 = bucket.blob('fotoselfie/{}'.format(gambar1Name))
+        blob2 = bucket.blob('fotoselfie/{}'.format(gambar2Name))
+        blob1.upload_from_filename(getGambar1.filename)
+        blob2.upload_from_filename(getGambar2.filename)
+        linkFoto1 = blob1.public_url #
+        linkFoto2 = blob2.public_url #
+        
+        os.remove(getGambar1.filename)
+        os.remove(getGambar2.filename)
+        
+        #Array
+        arr_gambar=np.array([gambar1,gambar2,gambar3])
+        arr_pic=np.array([pic1,pic2,pic3])
+        print(arr_gambar.shape, arr_pic.shape)
+        gab=np.append(arr_gambar,arr_pic,axis=0)
+        gablabel=np.append(np.ones(3),np.zeros(3))
+        sampled_indices = np.random.choice(gab.shape[0], size=(3,), replace=False)
+        sampled_array = gab[sampled_indices]
+        sampled_label = gablabel[sampled_indices]
+        unsampled_array=gab[~np.isin(np.arange(6), sampled_indices)]
+        unsampled_label=gablabel[~np.isin(np.arange(6), sampled_indices)]
+        image_data=[]
+        label_data=[]
+        for i in range(3):
+            for j in range(3):
+                image_data.append([sampled_array[i],unsampled_array[j]])
+                label_data.append(sampled_label[i]*unsampled_label[j])
+        label_data=np.array(label_data)
+        image_data=np.array(image_data)
+        
+        #Building Model
+        model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])  
+        print(image_data.shape, label_data.shape)
+        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.1,batch_size=64,epochs=50)
+        #Saving Model
+        h5 = str(uuid.uuid4())+"_"+idUser+"_train.h5"
+        
+        
+        model.save_weights("./"+h5)
+        h5Blob = bucket.blob('thomasandfriend/{}'.format(h5))
+        h5Blob.upload_from_filename("./"+h5)
+        linkModel = h5Blob.public_url #
+        
+        query2 = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)'
+        values = (idUser, linkFoto1, linkFoto2, linkModel)
+        sql.execute(query2, values)
+        
+        dbConn.commit()
+        
+        sql.close()
+        dbConn.close()
+        
+        os.remove(h5)
+        tf.keras.backend.clear_session()
+        return json.dumps({
+            "error": "false",
+            "message": "Data berhasil diinput",
+        })
 
 
-    gambar3=gambar2[:,::-1]
-
-    pic1=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_1.png")))[0]
-    pic2=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_2.png")))[0]
-    pic3=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_3.png")))[0]
-    
-    
-    gambar1Name = str(uuid.uuid4())+"_"+getGambar1.filename
-    gambar2Name = str(uuid.uuid4())+"_"+getGambar2.filename
-
-    
-    blob1 = bucket.blob('fotoselfie/{}'.format(gambar1Name))
-    blob2 = bucket.blob('fotoselfie/{}'.format(gambar2Name))
-    blob1.upload_from_filename(getGambar1.filename)
-    blob2.upload_from_filename(getGambar2.filename)
-    linkFoto1 = blob1.public_url #
-    linkFoto2 = blob2.public_url #
-    
-    os.remove(getGambar1.filename)
-    os.remove(getGambar2.filename)
-    
-    #Array
-    arr_gambar=np.array([gambar1,gambar2,gambar3])
-    arr_pic=np.array([pic1,pic2,pic3])
-    print(arr_gambar.shape, arr_pic.shape)
-    gab=np.append(arr_gambar,arr_pic,axis=0)
-    gablabel=np.append(np.ones(3),np.zeros(3))
-    sampled_indices = np.random.choice(gab.shape[0], size=(3,), replace=False)
-    sampled_array = gab[sampled_indices]
-    sampled_label = gablabel[sampled_indices]
-    unsampled_array=gab[~np.isin(np.arange(6), sampled_indices)]
-    unsampled_label=gablabel[~np.isin(np.arange(6), sampled_indices)]
-    image_data=[]
-    label_data=[]
-    for i in range(3):
-        for j in range(3):
-            image_data.append([sampled_array[i],unsampled_array[j]])
-            label_data.append(sampled_label[i]*unsampled_label[j])
-    label_data=np.array(label_data)
-    image_data=np.array(image_data)
-    
-    #Building Model
-    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])  
-    print(image_data.shape, label_data.shape)
-    history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.1,batch_size=64,epochs=50)
-    #Saving Model
-    h5 = str(uuid.uuid4())+"_"+idUser+"_train.h5"
-    
-    
-    model.save_weights("./"+h5)
-    h5Blob = bucket.blob('thomasandfriend/{}'.format(h5))
-    h5Blob.upload_from_filename("./"+h5)
-    linkModel = h5Blob.public_url #
-    
-    query2 = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)'
-    values = (idUser, linkFoto1, linkFoto2, linkModel)
-    sql.execute(query2, values)
-    
-    sql.connection.commit()
-    sql.connection.close()
-    
-    
-    os.remove(h5)
-    tf.keras.backend.clear_session()
-    return json.dumps({
-        "error": "false",
-        "message": "Data berhasil diinput",
-    })
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -202,7 +210,7 @@ def predict():
     getGambar1=preprocess_image(getGambar1)[0]
 
     getIdUser = request.form.get('idUser')
-    sql = mysql.connect.cursor()
+    sql = dbConn.cursor()
 
     query1 = 'SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s LIMIT 1' 
     sql.execute(query1, (getIdUser,))
@@ -243,9 +251,9 @@ def predict():
 
     #Threshold
     if Hasil>0.4:
-        sql.execute("UPDATE user SET verified = 1 WHERE id = %?", (getIdUser,))
+        sql.execute("UPDATE user SET verified = 1 WHERE id = %s", (getIdUser,))
         
-        sql.connection.commit()
+        dbConn.commit()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
     else:
