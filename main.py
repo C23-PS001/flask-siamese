@@ -23,10 +23,10 @@ app = Flask(__name__)
 CORS(app)
 
 # MySQL configurations
-app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST', '35.209.111.117')
-app.config['MYSQL_USER'] = os.getenv('MYSQL_USER', 'rakit-api-db')
-app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD', 'c23ps001')
-app.config['MYSQL_DB'] = os.getenv('MYSQL_DB', 'suarakita')
+app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
+app.config['MYSQL_USER'] = os.getenv('DB_USER')
+app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASS')
+app.config['MYSQL_DB'] = os.getenv('DB_NAME')
 
 mysql = MySQL(app)
 
@@ -71,37 +71,6 @@ featB = feature_extractor(imgB)
 distance = Lambda(euclidean_distance)([featA, featB])
 outputs = Dense(1, activation="sigmoid")(distance)
 
-@app.route('/users', methods=['GET'])
-def get_users():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM user")
-    data = cur.fetchall()
-    cur.close()
-    users = []
-    for user in data:
-        user_dict = {
-            'id': user[0],
-            'nama': user[1],
-            'email': user[2]
-        }
-        users.append(user_dict)
-    return jsonify(users)
-
-@app.route('/users', methods=['POST'])
-def add_user():
-    nik = request.json['nik']
-    nama = request.json['nama']
-    tanggalLahir = request.json['tanggalLahir']
-    email = request.json['email']
-    password = request.json['password']
-
-    cur = mysql.connection.cursor()
-    cur.execute("INSERT INTO user (nik, nama, tanggalLahir, email, password) VALUES (%s, %s,%s, %s)", (nik, nama, tanggalLahir, email, password))
-    mysql.connection.commit()
-    cur.close()
-
-    return jsonify({'message': 'User added successfully'})
-
 @app.route('/training', methods=['POST'])
 def train():
     getGambar1 = request.files['image1']
@@ -109,7 +78,14 @@ def train():
     getGambar1.save(getGambar1.filename)
     getGambar2.save(getGambar2.filename)
     idUser = request.form.get("idUser")
-
+    sql = mysql.connect.cursor()
+    
+    sql.execute("SELECT id FROM user WHERE id = {}".format(idUser))
+    data = sql.fetchone()
+    
+    if len(data) == 0:
+        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
+    
     model = Model(inputs=[imgA, imgB], outputs=outputs)
     model.load_weights("./transfer.h5")
     
@@ -136,8 +112,8 @@ def train():
     blob2 = bucket.blob('fotoselfie/{}'.format(gambar2Name))
     blob1.upload_from_filename(getGambar1.filename)
     blob2.upload_from_filename(getGambar2.filename)
-    linkFoto1 = blob1.public_url
-    linkFoto2 = blob2.public_url
+    linkFoto1 = blob1.public_url #
+    linkFoto2 = blob2.public_url #
     
     os.remove(getGambar1.filename)
     os.remove(getGambar2.filename)
@@ -173,23 +149,50 @@ def train():
     model.save_weights("./"+h5)
     h5Blob = bucket.blob('thomasandfriend/{}'.format(h5))
     h5Blob.upload_from_filename("./"+h5)
-    linkModel = h5Blob.public_url
-
+    linkModel = h5Blob.public_url #
+    
+    query = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES ({}, {}, {}, {})'.format(idUser, linkFoto1, linkFoto2, linkModel)
+    sql.execute(query)
+    
+    mysql.connection.commit()
+    sql.close()
     
     os.remove("./"+h5)
-    
-    return json.dumps({"linkFoto1": linkFoto1, "linkFoto2": linkFoto2, "linkmodel": linkModel})
+    tf.keras.backend.clear_session()
+    return json.dumps({
+        "error": "false",
+        "message": "Data berhasil diinput",
+        "linkFoto1": linkFoto1, 
+        "linkFoto2": linkFoto2, 
+        "linkmodel": linkModel
+    })
 
 @app.route('/predict', methods=['POST'])
 def predict():
     getGambar1 = request.files['Gambar']#Files Gambar Aldo
     getGambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]
-
-    getGambar2 = request.form.get('linkFoto2')
-    getGambar2 = requests.get(getGambar2)
-    getModel = request.form.get('linkModel')
+    getIdUser = request.form.get('idUser')
+    sql = mysql.connect.cursor()
+    
+    
+    
+    
+    sql.execute('SELECT listFoto1, listFoto2, model FROM fotouser, WHERE idUser IS {}'.format(getIdUser))
+    data = sql.fetchall()
+    
+    if len(data) == 0:
+        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
+    
+    
+    getGambar2 = data[0]
+    getModel = data[2]
+    
+    
+    # getGambar2 = request.form.get('linkFoto2')
+    # getGambar2 = requests.get(getGambar2)
+    # getModel = request.form.get('linkModel')
     modelFileName = getModel.split('/')[-1]
-    getModel = requests.get(getModel)
+    # getModel = requests.get(getModel)
     
     with open('./'+modelFileName, 'wb') as f:
         f.write(getModel.content)
@@ -213,9 +216,14 @@ def predict():
 
     #Threshold
     if Hasil>0.4:
-        return json.dumps({'Predict':True})
+        sql.execute("UPDATE user SET verified = 1 WHERE id = {}".format(getIdUser))
+        tf.keras.backend.clear_session()
+        return json.dumps({'error': 'false', 'message': 'Data tervalidasi','Predict':'true'})
     else:
-        return json.dumps({'Predict':False})
+        tf.keras.backend.clear_session()
+        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!', 'Predict':'false'})
+    
+    sql.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
