@@ -162,9 +162,6 @@ def train():
     return json.dumps({
         "error": "false",
         "message": "Data berhasil diinput",
-        "linkFoto1": linkFoto1, 
-        "linkFoto2": linkFoto2, 
-        "linkmodel": linkModel
     })
 
 @app.route('/predict', methods=['POST'])
