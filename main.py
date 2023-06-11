@@ -66,6 +66,22 @@ def euclidean_distance(vectors):
     sum_squared = k.sum(k.square(featA - featB), axis=1, keepdims=True)
     return k.sqrt(k.maximum(sum_squared, k.epsilon()))
 
+
+def get_faces(picture):
+    gray=picture.mean(axis=2)
+    faces = detector(gray)
+    if len(faces) == 1:
+        for face in faces:
+            # Get the coordinates of the face
+            x = face.left()
+            y = face.top()
+            w = face.width()
+            h = face.height()
+
+            # Draw a rectangle around the face
+            Crop=gray[y:y+h,x:x+w]
+    return Crop
+
 feature_extractor = create_model()
 imgA = Input(shape=(64, 64, 1))
 imgB = Input(shape=(64, 64, 1))
@@ -100,8 +116,15 @@ def train():
     bucket = client.get_bucket(bucket_name)
 
 
-    gambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]#Gambar Lurus
-    gambar2=preprocess_image(np.array(Image.open(getGambar2)))[0]#Gambar Samping
+    gambar1=np.array(Image.open(getGambar1))#Gambar Lurus
+    gambar1=get_faces(gambar1)#udah dicrop, grayscale
+    gambar1=preprocess_image(gambar1)[0]
+
+    gambar2=np.array(Image.open(getGambar2))#Gambar Samping
+    gambar2=get_faces(gambar2)#udah dicrop, grayscale
+    gambar2=preprocess_image(gambar2)[0]
+
+
     gambar3=gambar2[:,::-1]
 
     pic1=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_1.png")))[0]
@@ -174,7 +197,10 @@ def train():
 @app.route('/predict', methods=['POST'])
 def predict():
     getGambar1 = request.files['Gambar']#Files Gambar Aldo
-    getGambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]
+    getGambar1=np.array(Image.open(getGambar1))
+    getGambar1=get_faces(getGambar1)#Grayscale and Crop
+    getGambar1=preprocess_image(getGambar1)[0]
+
     getIdUser = request.form.get('idUser')
     sql = mysql.connect.cursor()
 
