@@ -80,7 +80,9 @@ def train():
     idUser = request.form.get("idUser")
     sql = mysql.connect.cursor()
     
-    sql.execute("SELECT id FROM user WHERE id = {}".format(idUser))
+    query1 = "SELECT id FROM user WHERE id = %s"
+    
+    sql.execute(query1, (idUser,))
     data = sql.fetchone()
     
     if len(data) == 0:
@@ -151,10 +153,11 @@ def train():
     h5Blob.upload_from_filename("./"+h5)
     linkModel = h5Blob.public_url #
     
-    query = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES ({}, {}, {}, {})'.format(idUser, linkFoto1, linkFoto2, linkModel)
-    sql.execute(query)
+    query2 = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)'
+    values = [idUser, linkFoto1, linkFoto2, linkModel]
+    sql.execute(query2.format(values))
     
-    mysql.connection.commit()
+    mysql.commit()
     sql.close()
     
     os.remove("./"+h5)
@@ -171,10 +174,9 @@ def predict():
     getIdUser = request.form.get('idUser')
     sql = mysql.connect.cursor()
     
+    query1 = 'SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s'
     
-    
-    
-    sql.execute('SELECT listFoto1, listFoto2, model FROM fotouser, WHERE idUser IS {}'.format(getIdUser))
+    sql.execute(query1, (getIdUser,))
     data = sql.fetchall()
     
     if len(data) == 0:
@@ -214,11 +216,12 @@ def predict():
     #Threshold
     if Hasil>0.4:
         sql.execute("UPDATE user SET verified = 1 WHERE id = {}".format(getIdUser))
+        mysql.commit()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','Predict':'true'})
     else:
         tf.keras.backend.clear_session()
-        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!', 'Predict':'false'})
+        return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'Predict':'false'})
     
     sql.close()
 
