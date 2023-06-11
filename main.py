@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google.cloud import storage
 from dotenv import load_dotenv
+
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout, GlobalAveragePooling2D, Dense, Input, Lambda
 from tensorflow.keras.models import Model
@@ -16,9 +17,10 @@ import os
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
 import mysql.connector
+import dlib
 
 load_dotenv()  # Load environment variables from .env file
-
+detector = dlib.get_frontal_face_detector()
 tf.keras.backend.clear_session()
 app = Flask(__name__)
 CORS(app)
@@ -175,27 +177,23 @@ def predict():
     getGambar1=preprocess_image(np.array(Image.open(getGambar1)))[0]
     getIdUser = request.form.get('idUser')
     sql = mysql.connect.cursor()
-    
-    query1 = 'SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s'
-    
+
+    query1 = 'SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s LIMIT 1' 
     sql.execute(query1, (getIdUser,))
     data = sql.fetchall()
     
     if len(data) == 0:
         return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
-    
-    
-    print(data)
-    
-    getGambar2 = data[0]
-    getModel = data[2]
-    
+
+   
+    getGambar2 = data[0][0]
+    getModel = data[0][2]
     
     # getGambar2 = request.form.get('linkFoto2')
-    # getGambar2 = requests.get(getGambar2)
+    getGambar2 = requests.get(getGambar2)
     # getModel = request.form.get('linkModel')
     modelFileName = getModel.split('/')[-1]
-    # getModel = requests.get(getModel)
+    getModel = requests.get(getModel)
     
     with open('./'+modelFileName, 'wb') as f:
         f.write(getModel.content)
@@ -223,12 +221,11 @@ def predict():
         
         sql.connection.commit()
         tf.keras.backend.clear_session()
-        return json.dumps({'error': 'false', 'message': 'Data tervalidasi','Predict':'true'})
+        return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
     else:
         tf.keras.backend.clear_session()
-        return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'Predict':'false'})
-    
-    sql.connection.close()
+        return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
