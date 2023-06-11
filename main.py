@@ -15,6 +15,7 @@ import requests
 import os
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
+import mysql.connector
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -154,13 +155,14 @@ def train():
     linkModel = h5Blob.public_url #
     
     query2 = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)'
-    values = [idUser, linkFoto1, linkFoto2, linkModel]
-    sql.execute(query2.format(values))
+    values = (idUser, linkFoto1, linkFoto2, linkModel)
+    sql.execute(query2, values)
     
-    mysql.commit()
-    sql.close()
+    sql.connection.commit()
+    sql.connection.close()
     
-    os.remove("./"+h5)
+    
+    os.remove(h5)
     tf.keras.backend.clear_session()
     return json.dumps({
         "error": "false",
@@ -182,6 +184,8 @@ def predict():
     if len(data) == 0:
         return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
     
+    
+    print(data)
     
     getGambar2 = data[0]
     getModel = data[2]
@@ -215,15 +219,16 @@ def predict():
 
     #Threshold
     if Hasil>0.4:
-        sql.execute("UPDATE user SET verified = 1 WHERE id = {}".format(getIdUser))
-        mysql.commit()
+        sql.execute("UPDATE user SET verified = 1 WHERE id = %?", (getIdUser,))
+        
+        sql.connection.commit()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','Predict':'true'})
     else:
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'Predict':'false'})
     
-    sql.close()
+    sql.connection.close()
 
 if __name__ == '__main__':
     app.run(debug=True)

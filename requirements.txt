@@ -8,3 +8,4 @@ flask-cors==3.0
 requests==2.29.0
 Flask-MySQLdb==1.0.1
 python-dotenv==1.0.0
+mysql-connector-python==3.19.6
