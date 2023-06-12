@@ -9,4 +9,4 @@ flask-cors==3.0
 requests==2.29.0
 python-dotenv==1.0.0
 PyMySQL==1.0.3
-# google-cloud-secret-manager==2.16.1
+google-cloud-secret-manager==2.16.1

@@ -3,6 +3,7 @@ from PIL import Image
 from flask import Flask, request
 from flask_cors import CORS
 from google.cloud import storage
+from google.cloud import secretmanager
 from dotenv import load_dotenv
 
 import tensorflow as tf
@@ -14,7 +15,6 @@ import json
 import uuid
 import requests
 import os
-# from flask_mysqldb import MySQL
 from dotenv import load_dotenv
 import pymysql
 import dlib
@@ -116,9 +116,16 @@ def train():
         model = Model(inputs=[imgA, imgB], outputs=outputs)
         model.load_weights("./transfer.h5")
         
-        credentials_path = r"nyobaaja-973da4b3851c.json"
-        client = storage.Client.from_service_account_json(credentials_path)
-        bucket_name = 'upload_foto'
+        gcpClient = secretmanager.SecretManagerServiceClient()
+        
+        keysName = f"projects/872765504345/secrets/gcs-key/versions/latest"
+        
+        response = gcpClient.access_secret_version(request={"name": keysName})
+        
+        credentials = json.loads(response.payload.data.decode('UTF-8'))
+        
+        client = storage.Client.from_service_account_info(credentials)
+        bucket_name = 'suara-kita'
         bucket = client.get_bucket(bucket_name)
 
 
@@ -180,7 +187,7 @@ def train():
         
         
         model.save_weights("./"+h5)
-        h5Blob = bucket.blob('thomasandfriend/{}'.format(h5))
+        h5Blob = bucket.blob('train-model/{}'.format(h5))
         h5Blob.upload_from_filename("./"+h5)
         linkModel = h5Blob.public_url #
         
@@ -246,8 +253,7 @@ def predict():
     #Prediction 
     Hasil=new_model.predict([np.array([validasi]),np.array([anchor])])[0][0]
     print(type(Hasil))
-    sql.close()
-    dbConn.close()
+
     os.remove("./"+modelFileName)
 
     #Threshold
@@ -259,7 +265,9 @@ def predict():
         dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
-    else:
+    else:    
+        sql.close()
+        dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
 
