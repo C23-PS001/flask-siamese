@@ -35,7 +35,8 @@ dbConn = pymysql.connect(
     host=os.getenv('DB_HOST'),
     user=os.getenv('DB_USER'),
     password= os.getenv('DB_PASS'),
-    db=os.getenv('DB_NAME')
+    database=os.getenv('DB_NAME'),
+    cursorclass=pymysql.cursors.DictCursor
 )
 
 def preprocess_image(image):
@@ -110,8 +111,8 @@ def train():
         sql.execute(query1, (idUser,))
         data = sql.fetchall()
         
-        if len(data) == 0:
-            return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
+        # if len(data) == 0:
+        #     return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
         
         model = Model(inputs=[imgA, imgB], outputs=outputs)
         model.load_weights("./transfer.h5")
@@ -181,7 +182,7 @@ def train():
         #Building Model
         model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])  
         print(image_data.shape, label_data.shape)
-        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.1,batch_size=64,epochs=50)
+        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.1,batch_size=64,epochs=10)
         #Saving Model
         h5 = str(uuid.uuid4())+"_"+idUser+"_train.h5"
         
@@ -223,12 +224,11 @@ def predict():
     sql.execute(query1, (getIdUser,))
     data = sql.fetchall()
     
-    if len(data) == 0:
-        return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
+    # if len(data) == 0:
+    #     return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
 
-   
-    getGambar2 = data[0][0]
-    getModel = data[0][2]
+    getGambar2 = data[0]['listFoto1']
+    getModel = data[0]['model']
     
     # getGambar2 = request.form.get('linkFoto2')
     getGambar2 = requests.get(getGambar2)
@@ -252,26 +252,29 @@ def predict():
 
     #Prediction 
     Hasil=new_model.predict([np.array([validasi]),np.array([anchor])])[0][0]
-    print(type(Hasil))
+    print(Hasil, type(Hasil))
 
     os.remove("./"+modelFileName)
 
     #Threshold
     if Hasil>0.4:
-        sql.execute("UPDATE user SET verified = 1 WHERE id = %s", (getIdUser,))
+        # sql.execute("UPDATE user SET verified = 1 WHERE id = %s", (getIdUser,))
         
-        dbConn.commit()
+        # dbConn.commit()
         # sql.close()
-        # dbConn.close()
+        #dbConn.close()
         tf.keras.backend.clear_session()
+        
+        
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
     else:    
         # sql.close()
         # dbConn.close()
         tf.keras.backend.clear_session()
+        #dbConn.close()
+        
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
-    sql.close()
-    dbConn.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)
