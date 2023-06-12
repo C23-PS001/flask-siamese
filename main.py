@@ -270,7 +270,8 @@ def predict():
         dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
-
+    sql.close()
+    dbConn.close()
 
 
 
