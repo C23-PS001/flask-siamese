@@ -25,6 +25,14 @@ tf.keras.backend.clear_session()
 app = Flask(__name__)
 CORS(app)
 
+class myCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self,epoch,logs={}):
+        if logs.get('accuracy')>0.8:
+            print('\nAccuracy ngestop epoch')
+            self.model.stop_training =True
+            
+callbacks = myCallback()
+
 # # MySQL configurations
 # app.config['MYSQL_HOST'] = 
 # app.config['MYSQL_USER'] = 
@@ -76,8 +84,8 @@ def euclidean_distance(vectors):
 
 
 def get_faces(picture):
-    gray=picture.mean(axis=2)
-    faces = detector(gray)
+    # gray=picture.mean(axis=2)
+    faces = detector(picture)
     if len(faces) == 1:
         for face in faces:
             # Get the coordinates of the face
@@ -88,7 +96,7 @@ def get_faces(picture):
 
             # Draw a rectangle around the face
             Crop=picture[int(y+0.05*h):int(y+0.95*h),int(x+0.05*w):int(x+0.95*w)]
-    return Crop
+        return Crop
 
 feature_extractor = create_model()
 imgA = Input(shape=(64, 64, 1))
@@ -110,14 +118,14 @@ def train():
         
         query1 = "SELECT id FROM user WHERE id = %s"
         
-        sql.execute(query1, (idUser,))
+        sql.execute(query1, (f"{idUser}"))
         data = sql.fetchall()
         
         # if len(data) == 0:
         #     return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
         
         model = Model(inputs=[imgA, imgB], outputs=outputs)
-        model.load_weights("./transfer sample1.h5")
+        model.load_weights("./transfer_sample1.h5")
         
         gcpClient = secretmanager.SecretManagerServiceClient()
         
@@ -132,7 +140,8 @@ def train():
         bucket = client.get_bucket(bucket_name)
 
 
-        gambar1=np.array(Image.open(getGambar1))#Gambar Lurus
+        gambar1=np.array(Image.open(getGambar1))
+        print(gambar1.shape)#Gambar Lurus
         gambar1=get_faces(gambar1)#udah dicrop, blom gray
         gambar1=preprocess_image(gambar1)[0]
         gambar1=np.mean(gambar1,axis=2)#Grayscale
@@ -192,18 +201,19 @@ def train():
         #Building Model
         model.compile(loss="binary_crossentropy", optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), metrics=["accuracy"])  
         print(image_data.shape, label_data.shape)
-        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.3,batch_size=64,epochs=10)
+        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.3,batch_size=64,epochs=20,callbacks=[callbacks])
         #Saving Model
-        h5 = str(uuid.uuid4())+"_"+idUser+"_train.h5"
+        h5 = str(uuid.uuid4())+"_model"+idUser+"_train.h5"
         
         
-        model.save_weights("./"+h5)
+        
+        model.save_weights("./"+h5.strip())
         h5Blob = bucket.blob('train-model/{}'.format(h5))
         h5Blob.upload_from_filename("./"+h5)
         linkModel = h5Blob.public_url #
         
-        query2 = 'INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)'
-        values = (idUser, linkFoto1, linkFoto2, linkModel)
+        query2 = "INSERT INTO fotouser(idUser, listFoto1, listFoto2, model) VALUES (%s, %s, %s, %s)"
+        values = (f"{idUser}", linkFoto1, linkFoto2, linkModel)
         sql.execute(query2, values)
         
         dbConn.commit()
@@ -220,8 +230,16 @@ def train():
 
 
 
+
 @app.route('/predict', methods=['POST'])
 def predict():
+    dbConn = pymysql.connect(
+        host=os.getenv('DB_HOST'),
+        user=os.getenv('DB_USER'),
+        password= os.getenv('DB_PASS'),
+        database=os.getenv('DB_NAME'),
+        cursorclass=pymysql.cursors.DictCursor
+    )
     getGambar1 = request.files['Gambar']#Files Gambar Aldo
     getGambar1=np.array(Image.open(getGambar1))
     getGambar1=get_faces(getGambar1)#Crop
@@ -231,8 +249,8 @@ def predict():
     getIdUser = request.form.get('idUser')
     sql = dbConn.cursor()
 
-    query1 = 'SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s LIMIT 1' 
-    sql.execute(query1, (getIdUser,))
+    query1 = "SELECT listFoto1, listFoto2, model FROM fotouser WHERE idUser = %s LIMIT 1" 
+    sql.execute(query1, (f"{getIdUser}"))
     data = sql.fetchall()
     
     # if len(data) == 0:
