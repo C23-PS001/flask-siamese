@@ -261,17 +261,17 @@ def predict():
         sql.execute("UPDATE user SET verified = 1 WHERE id = %s", (getIdUser,))
         
         dbConn.commit()
-        sql.close()
-        dbConn.close()
+        # sql.close()
+        # dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'false', 'message': 'Data tervalidasi','hasilPredict':'true'})
     else:    
-        sql.close()
-        dbConn.close()
+        # sql.close()
+        # dbConn.close()
         tf.keras.backend.clear_session()
         return json.dumps({'error': 'true', 'message': 'Data tidak valid!', 'hasilPredict':'false'})
-    sql.close()
-    dbConn.close()
+    # sql.close()
+    # dbConn.close()
 
 
 
