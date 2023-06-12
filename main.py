@@ -41,7 +41,9 @@ dbConn = pymysql.connect(
 
 def preprocess_image(image):
     desired_size = (64, 64)
-    image = np.resize(image, desired_size)
+    image = Image.fromarray(image)
+    image = image.resize(desired_size)
+    image = np.array(image)
     image = image.astype('float32') / 255.0
     image = np.expand_dims(image, axis=0)
     return image
@@ -52,16 +54,16 @@ def create_model():
     x = MaxPooling2D(pool_size=(2, 2))(x)
     x = Dropout(0.3)(x)
 
-    x = Conv2D(128, (7, 7), padding="same", activation="relu")(x)
+    x = Conv2D(256, (5, 5), padding="same", activation="relu")(x)
     x = MaxPooling2D(pool_size=(2, 2))(x)
     x = Dropout(0.3)(x)
 
-    x = Conv2D(256, (3, 3), padding="same", activation="relu")(x)
+    x = Conv2D(512, (3, 3), padding="same", activation="relu")(x)
     x = MaxPooling2D(pool_size=(2, 2))(x)
     x = Dropout(0.3)(x)
 
     pooledOutput = GlobalAveragePooling2D()(x)
-    pooledOutput = Dense(512)(pooledOutput)
+    pooledOutput = Dense(2048)(pooledOutput)
     outputs = Dense(128)(pooledOutput)
 
     model = Model(inputs, outputs)
@@ -74,8 +76,8 @@ def euclidean_distance(vectors):
 
 
 def get_faces(picture):
-    # gray=picture.mean(axis=2)
-    faces = detector(picture)
+    gray=picture.mean(axis=2)
+    faces = detector(gray)
     if len(faces) == 1:
         for face in faces:
             # Get the coordinates of the face
@@ -85,7 +87,7 @@ def get_faces(picture):
             h = face.height()
 
             # Draw a rectangle around the face
-            Crop=picture[y:y+h,x:x+w]
+            Crop=picture[int(y+0.05*h):int(y+0.95*h),int(x+0.05*w):int(x+0.95*w)]
     return Crop
 
 feature_extractor = create_model()
@@ -115,7 +117,7 @@ def train():
         #     return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
         
         model = Model(inputs=[imgA, imgB], outputs=outputs)
-        model.load_weights("./transfer.h5")
+        model.load_weights("./transfer sample1.h5")
         
         gcpClient = secretmanager.SecretManagerServiceClient()
         
@@ -131,11 +133,13 @@ def train():
 
 
         gambar1=np.array(Image.open(getGambar1))#Gambar Lurus
-        gambar1=get_faces(gambar1)#udah dicrop, grayscale
+        gambar1=get_faces(gambar1)#udah dicrop, blom gray
         gambar1=preprocess_image(gambar1)[0]
+        gambar1=np.mean(gambar1,axis=2)#Grayscale
         gambar2=np.array(Image.open(getGambar2))#Gambar Samping
-        gambar2=get_faces(gambar2)#udah dicrop, grayscale
+        gambar2=get_faces(gambar2)#udah dicrop, blom gray
         gambar2=preprocess_image(gambar2)[0]
+        gambar2=np.mean(gambar2,axis=2)#Grayscale
 
 
         gambar3=gambar2[:,::-1]
@@ -143,6 +147,12 @@ def train():
         pic1=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_1.png")))[0]
         pic2=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_2.png")))[0]
         pic3=preprocess_image(np.array(tf.keras.preprocessing.image.load_img("./lawan_3.png")))[0]
+
+        pic1=np.mean(pic1,axis=2)
+        pic2=np.mean(pic2,axis=2)
+        pic3=np.mean(pic3,axis=2)
+
+        print(gambar1.shape,gambar2.shape,gambar3.shape,pic1.shape,pic2.shape,pic3.shape)
         
         
         gambar1Name = str(uuid.uuid4())+"_"+getGambar1.filename
@@ -180,9 +190,9 @@ def train():
         image_data=np.array(image_data)
         
         #Building Model
-        model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])  
+        model.compile(loss="binary_crossentropy", optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), metrics=["accuracy"])  
         print(image_data.shape, label_data.shape)
-        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.1,batch_size=64,epochs=10)
+        history = model.fit([image_data[:, 0], image_data[:, 1]], label_data[:],validation_split=0.3,batch_size=64,epochs=10)
         #Saving Model
         h5 = str(uuid.uuid4())+"_"+idUser+"_train.h5"
         
@@ -214,8 +224,9 @@ def train():
 def predict():
     getGambar1 = request.files['Gambar']#Files Gambar Aldo
     getGambar1=np.array(Image.open(getGambar1))
-    getGambar1=get_faces(getGambar1)#Grayscale and Crop
+    getGambar1=get_faces(getGambar1)#Crop
     getGambar1=preprocess_image(getGambar1)[0]
+    getGambar1=np.mean(getGambar1,axis=2)#Grayscale
 
     getIdUser = request.form.get('idUser')
     sql = dbConn.cursor()
@@ -246,8 +257,10 @@ def predict():
     new_model.load_weights("./"+modelFileName)
 
     #processing
-    validasi=preprocess_image(validasi)[0]
+    # validasi=preprocess_image(validasi)[0]
+    anchor=get_faces(anchor)
     anchor=preprocess_image(anchor)[0]
+    anchor=np.mean(anchor,axis=2)
     print(validasi.shape,anchor.shape)
 
     #Prediction 
