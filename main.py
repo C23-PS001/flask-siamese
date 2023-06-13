@@ -261,8 +261,8 @@ def predict():
     # if len(data) == 0:
     #     return json.dumps({'error': 'true', 'message': 'Data tidak terdaftar!'})
 
-    getGambar2 = data[0][0]
-    getModel = data[0][2]
+    getGambar2 = data[0]['listFoto1']
+    getModel = data[0]['model']
     
     # getGambar2 = request.form.get('linkFoto2')
     getGambar2 = requests.get(getGambar2)
