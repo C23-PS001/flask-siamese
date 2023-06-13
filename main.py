@@ -39,13 +39,13 @@ callbacks = myCallback()
 # app.config['MYSQL_PASSWORD'] = 
 # app.config['MYSQL_DB'] = 
 
-dbConn = pymysql.connect(
-    host=os.getenv('DB_HOST'),
-    user=os.getenv('DB_USER'),
-    password= os.getenv('DB_PASS'),
-    database=os.getenv('DB_NAME'),
-    cursorclass=pymysql.cursors.DictCursor
-)
+# dbConn = pymysql.connect(
+#     host=os.getenv('DB_HOST'),
+#     user=os.getenv('DB_USER'),
+#     password= os.getenv('DB_PASS'),
+#     database=os.getenv('DB_NAME'),
+#     cursorclass=pymysql.cursors.DictCursor
+# )
 
 def preprocess_image(image):
     desired_size = (64, 64)
@@ -108,7 +108,13 @@ outputs = Dense(1, activation="sigmoid")(distance)
 
 @app.route('/training', methods=['POST'])
 def train():
-    
+        dbConn = pymysql.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password= os.getenv('DB_PASS'),
+            database=os.getenv('DB_NAME'),
+            cursorclass=pymysql.cursors.DictCursor
+        )
         getGambar1 = request.files['image1']
         getGambar2 = request.files['image2']    
         getGambar1.save(getGambar1.filename)
@@ -218,10 +224,9 @@ def train():
         
         dbConn.commit()
         
+        os.remove(h5)        
         sql.close()
         dbConn.close()
-        
-        os.remove(h5)
         tf.keras.backend.clear_session()
         return json.dumps({
             "error": "false",
